@@ -1,0 +1,127 @@
+#include <WiFiMulti.h>
+WiFiMulti wifiMulti;
+#include <HardwareSerial.h>
+#include "MHZ19.h"
+#include <InfluxDbClient.h>
+#include <InfluxDbCloud.h>
+#include "DHT.h"
+
+
+#define DEVICE "ESP32"
+#define WIFI_SSID "SSID"                                   // WiFi AP SSID
+#define WIFI_PASSWORD "password"                           // WiFi password
+#define INFLUXDB_URL "https://westeurope-1.azure.cloud2.influxdata.com"                            // InFluxDB URL
+#define INFLUXDB_TOKEN "FS8hSyUmBlhOuQOpZVFqfsdsfdfddxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                // InFluxDB Token
+#define INFLUXDB_ORG "jeroenXXXot@gmailXXX"                // organisation
+#define INFLUXDB_BUCKET "a0e36xxxxxxxxxxx"                 // bucketID
+#define TZ_INFO "CET-1CEST,M3.5.0,M10.5.0/3"
+
+#define RX_PIN 16                                          // Rx2 pin which the MHZ19 Tx pin is attached to
+#define TX_PIN 17                                          // Tx2 pin which the MHZ19 Rx pin is attached to
+#define BAUDRATE 9600                                      // Device to MH-Z19 Serial baudrate (should not be changed)
+
+#define DHTPIN 4                                           // DHT 22  (AM2302), AM2321
+#define DHTTYPE DHT22                                      // DHT 22  (AM2302), AM2321
+
+const int DELAY = 10000;                                   // Delay in milliseconds between each reading
+unsigned long getDataTimer = 0;
+
+
+
+
+
+// DHT sensor
+DHT dht(DHTPIN, DHTTYPE);
+
+
+// InfluxDB client instance with preconfigured InfluxCloud certificate
+InfluxDBClient client(INFLUXDB_URL, INFLUXDB_ORG, INFLUXDB_BUCKET, INFLUXDB_TOKEN, InfluxDbCloud2CACert);
+// Data point
+Point sensor("sensordata");
+
+// MH-Z19
+MHZ19 myMHZ19;                                             // Constructor for library
+HardwareSerial mySerial(1);                              // (ESP32 Example) create device to MH-Z19 serial
+
+
+
+void setup() {
+  Serial.begin(115200);
+
+  // Setup wifi
+  WiFi.mode(WIFI_STA);
+  wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
+
+  Serial.print("Connecting to wifi");
+  while (wifiMulti.run() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(100);
+  }
+  Serial.println();
+
+  // DHT
+  dht.begin();
+
+  // Add tags
+  sensor.addTag("device", DEVICE);
+
+  // MHZ19
+  mySerial.begin(BAUDRATE, SERIAL_8N1, RX_PIN, TX_PIN);   // Device to MH-Z19 serial start
+  myMHZ19.begin(mySerial);                                // *Serial(Stream) refence must be passed to library begin().
+  myMHZ19.autoCalibration();                              // Turn auto calibration ON (OFF autoCalibration(false))
+
+  // Time
+  timeSync(TZ_INFO, "nl.pool.ntp.org", "time.nis.gov");
+
+  // Check server connection
+  if (client.validateConnection()) {
+    Serial.print("Connected to InfluxDB: ");
+    Serial.println(client.getServerUrl());
+  } else {
+    Serial.print("InfluxDB connection failed: ");
+    Serial.println(client.getLastErrorMessage());
+  }
+}
+
+
+
+void loop() {
+  if (millis() - getDataTimer >= DELAY)
+  {
+
+    // CO2
+    int CO2;
+    CO2 = myMHZ19.getCO2(); // Request CO2 (as ppm)
+
+    //Temp and hum
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
+
+    if (isnan(h) || isnan(t)) {
+      Serial.println(F("Failed to read from DHT sensor!"));
+      return;
+    }
+
+    //store data in InfluxDB
+    sensor.clearFields();  // Store measured value into point
+    sensor.addField("ppm", CO2);  // Report CO2 ppm
+    sensor.addField("temp", t);  // Report Temperature
+    sensor.addField("hum", h);  // Report Humidity
+
+    Serial.print("Writing: ");  // Print what are we exactly writing
+    Serial.println(sensor.toLineProtocol());
+
+    // If no Wifi signal, try to reconnect it
+    if ((WiFi.RSSI() == 0) && (wifiMulti.run() != WL_CONNECTED))
+      Serial.println("Wifi connection lost");
+    // Write point
+    if (!client.writePoint(sensor)) {
+      Serial.print("InfluxDB write failed: ");
+      Serial.println(client.getLastErrorMessage());
+    }
+
+    //Wait 10s
+    Serial.println("Wait 10s");
+    getDataTimer = millis();                            // Reset timer
+  }
+}
