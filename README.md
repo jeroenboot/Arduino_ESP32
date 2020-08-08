@@ -1,2 +1,2 @@
-# Arduino_ESP32
-Scripts to be used with ESP32 microcontroller
+# Arduino_ESP32 and EESP8266
+Scripts to be used with ESP32 and ESP8266 microcontroller
