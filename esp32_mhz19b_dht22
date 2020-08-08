@@ -12,7 +12,7 @@ WiFiMulti wifiMulti;
 #define WIFI_PASSWORD "password"                           // WiFi password
 #define INFLUXDB_URL "https://westeurope-1.azure.cloud2.influxdata.com"                            // InFluxDB URL
 #define INFLUXDB_TOKEN "FS8hSyUmBlhOuQOpZVFqfsdsfdfddxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"                // InFluxDB Token
-#define INFLUXDB_ORG "jeroenXXXot@gmailXXX"                // organisation
+#define INFLUXDB_ORG "j1f2###1c#1e###d"                // organisation
 #define INFLUXDB_BUCKET "a0e36xxxxxxxxxxx"                 // bucketID
 #define TZ_INFO "CET-1CEST,M3.5.0,M10.5.0/3"
 
